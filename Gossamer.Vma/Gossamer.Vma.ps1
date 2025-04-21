@@ -12,6 +12,8 @@ function Exit-OnFailed {
     }
 }
 
+Write-Host "Building Gossamer.Vma ..." -ForegroundColor Green
+
 & cmake -S . `
     -B build `
     -A x64 `

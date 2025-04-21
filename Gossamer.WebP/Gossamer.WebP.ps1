@@ -12,6 +12,7 @@ function Exit-OnFailed {
     }
 }
 
+Write-Host "Building libwebp ..." -ForegroundColor Green
 Set-Location ./libwebp
 
 & cmake -S . `
@@ -38,6 +39,7 @@ Exit-OnFailed "libwebp build failed"
 & cmake --install build --config Release --prefix build/install --verbose
 Exit-OnFailed "libwebp install failed"
 
+Write-Host "Building Gossamer.WebP ..." -ForegroundColor Green
 Set-Location ../
 
 & cmake -S . `

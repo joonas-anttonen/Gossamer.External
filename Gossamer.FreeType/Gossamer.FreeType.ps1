@@ -12,6 +12,7 @@ function Exit-OnFailed {
     }
 }
 
+Write-Host "Building FreeType ..." -ForegroundColor Green
 Set-Location ./freetype
 
 & cmake -S . `
@@ -22,15 +23,15 @@ Set-Location ./freetype
     -DFT_DISABLE_BZIP2=ON  `
     -DFT_DISABLE_PNG=ON  `
     -DFT_DISABLE_BROTLI=ON 
-Exit-OnFailed "freetype configuration failed"
+Exit-OnFailed "FreeType configuration failed"
 
 & cmake --build build --config Release --verbose
-Exit-OnFailed "freetype build failed"
+Exit-OnFailed "FreeType build failed"
 
 & cmake --install build --config Release --prefix build/install --verbose
-Exit-OnFailed "freetype install failed"
+Exit-OnFailed "FreeType install failed"
 
-Write-Host "Gossamer.FreeType" -ForegroundColor Green
+Write-Host "Building Gossamer.FreeType ..." -ForegroundColor Green
 Set-Location ../
 
 & cmake -S . `
