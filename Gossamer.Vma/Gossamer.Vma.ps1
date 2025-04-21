@@ -1,0 +1,37 @@
+# Enable error handling
+$ErrorActionPreference = "Stop"
+
+function Exit-OnFailed {
+    param (
+        [string]$ErrorMessage
+    )
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host $ErrorMessage -ForegroundColor Red
+        exit 1
+    }
+}
+
+& cmake -S . `
+    -B build `
+    -A x64 `
+    -DCMAKE_BUILD_TYPE=Release
+Exit-OnFailed "Gossamer.Vma configuration failed"
+
+& cmake --build build --config Release --verbose
+Exit-OnFailed "Gossamer.Vma build failed"
+
+& cmake --install build --config Release --prefix build/install --verbose
+Exit-OnFailed "Gossamer.Vma install failed"
+
+$SrcDir = Resolve-Path -Path "build/install"
+$DstDir = Resolve-Path -Path "../bin"
+New-Item -ItemType Directory -Path $DstDir -Force | Out-Null
+
+Write-Host "Copied to $DstDir" -ForegroundColor Green
+
+Get-ChildItem -Path $SrcDir -Filter "*.dll" -Recurse | ForEach-Object {
+    Copy-Item -Path $_.FullName -Destination $DstDir -Force
+    Write-Host "$($_.Name)" -ForegroundColor Green
+}
+
