@@ -4,3 +4,6 @@
 [submodule "Gossamer.Vma/VulkanMemoryAllocator"]
 	path = Gossamer.Vma/VulkanMemoryAllocator
 	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+[submodule "Gossamer.FreeType/freetype"]
+	path = Gossamer.FreeType/freetype
+	url = https://github.com/freetype/freetype.git
