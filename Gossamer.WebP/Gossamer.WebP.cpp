@@ -42,7 +42,7 @@ extern "C"
         if (in_data == nullptr || in_data_size == 0 || out_data == nullptr || out_data_size == nullptr)
             return static_cast<int32_t>(Status::InvalidArgument);
 
-        int width = 0, height = 0;
+        int32_t width = 0, height = 0;
         if (out_format == Format::RGBA)
         {
             *out_data = WebPDecodeRGBA(in_data, in_data_size, &width, &height);
@@ -66,15 +66,14 @@ extern "C"
         }
     }
 
-    __declspec(dllexport) int32_t webpDecodeInto(const uint8_t *in_data, size_t in_data_size, Format out_format, uint8_t *out_data, size_t out_data_size)
+    __declspec(dllexport) int32_t webpDecodeInto(const uint8_t *in_data, size_t in_data_size, Format out_format, uint8_t *out_data, size_t out_data_size, int32_t out_stride)
     {
         if (in_data == nullptr || in_data_size == 0 || out_data == nullptr || out_data_size == 0)
             return static_cast<int32_t>(Status::InvalidArgument);
 
-        int width = 0, height = 0;
         if (out_format == Format::RGBA)
         {
-            uint8_t *result = WebPDecodeRGBAInto(in_data, in_data_size, out_data, out_data_size, width * 4);
+            uint8_t *result = WebPDecodeRGBAInto(in_data, in_data_size, out_data, out_data_size, out_stride);
             if (result != nullptr)
             {
                 return static_cast<int32_t>(Status::OK);
@@ -90,16 +89,14 @@ extern "C"
         }
     }
 
-    __declspec(dllexport) int32_t webpEncode(const uint8_t *in_data, size_t in_data_size, Format in_format, int width, int height, uint8_t **out_data, size_t *out_data_size)
+    __declspec(dllexport) int32_t webpEncode(const uint8_t *in_data, size_t in_data_size, Format in_format, int32_t width, int32_t height, uint8_t **out_data, size_t *out_data_size, int32_t out_stride)
     {
-        if (in_data == nullptr || in_data_size == 0 || width <= 0 || height <= 0 || out_data == nullptr || out_data_size == nullptr)
+        if (in_data == nullptr || in_data_size == 0 || width <= 0 || height <= 0 || out_data == nullptr || out_data_size == nullptr || out_stride <= 0)
             return static_cast<int32_t>(Status::InvalidArgument);
 
         if (in_format == Format::RGBA)
         {
-            int stride = width * 4; // RGBA has 4 bytes per pixel
-
-            size_t encoded = WebPEncodeLosslessRGBA(in_data, width, height, stride, out_data);
+            size_t encoded = WebPEncodeLosslessRGBA(in_data, width, height, out_stride, out_data);
             if (encoded > 0)
             {
                 *out_data_size = encoded;
