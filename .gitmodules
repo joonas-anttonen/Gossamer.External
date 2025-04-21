@@ -1,0 +1,3 @@
+[submodule "Gossamer.WebP/libwebp"]
+	path = Gossamer.WebP/libwebp
+	url = https://chromium.googlesource.com/webm/libwebp
