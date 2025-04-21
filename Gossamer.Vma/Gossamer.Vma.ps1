@@ -35,3 +35,4 @@ Get-ChildItem -Path $SrcDir -Filter "*.dll" -Recurse | ForEach-Object {
     Write-Host "$($_.Name)" -ForegroundColor Green
 }
 
+Remove-Item -Path ./build -Recurse -Force
