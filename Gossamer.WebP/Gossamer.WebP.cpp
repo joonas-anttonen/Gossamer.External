@@ -66,6 +66,30 @@ extern "C"
         }
     }
 
+    __declspec(dllexport) int32_t DecodeInto(const uint8_t *in_data, size_t in_data_size, Format out_format, uint8_t *out_data, size_t out_data_size)
+    {
+        if (in_data == nullptr || in_data_size == 0 || out_data == nullptr || out_data_size == 0)
+            return static_cast<int32_t>(Status::InvalidArgument);
+
+        int width = 0, height = 0;
+        if (out_format == Format::RGBA)
+        {
+            uint8_t *result = WebPDecodeRGBAInto(in_data, in_data_size, out_data, out_data_size, width * 4);
+            if (result != nullptr)
+            {
+                return static_cast<int32_t>(Status::OK);
+            }
+            else
+            {
+                return static_cast<int32_t>(Status::InvalidData);
+            }
+        }
+        else
+        {
+            return static_cast<int32_t>(Status::InvalidArgument);
+        }
+    }
+
     __declspec(dllexport) int32_t Encode(const uint8_t *in_data, size_t in_data_size, Format in_format, int width, int height, uint8_t **out_data, size_t *out_data_size)
     {
         if (in_data == nullptr || in_data_size == 0 || width <= 0 || height <= 0 || out_data == nullptr || out_data_size == nullptr)
@@ -74,7 +98,7 @@ extern "C"
         if (in_format == Format::RGBA)
         {
             int stride = width * 4; // RGBA has 4 bytes per pixel
-            
+
             size_t encoded = WebPEncodeLosslessRGBA(in_data, width, height, stride, out_data);
             if (encoded > 0)
             {
