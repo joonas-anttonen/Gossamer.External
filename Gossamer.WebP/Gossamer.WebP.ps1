@@ -55,13 +55,15 @@ Exit-OnFailed "Gossamer.WebP build failed"
 & cmake --install build --config Release --prefix build/install --verbose
 Exit-OnFailed "Gossamer.WebP install failed"
 
-$SrcDir = Resolve-Path -Path "build/install"
-$DstDir = Resolve-Path -Path "../bin"
+$DstDir = "../bin"
+$SrcDir = "build/install"
 New-Item -ItemType Directory -Path $DstDir -Force | Out-Null
+$DstDir = Resolve-Path -Path $DstDir
+$SrcDir = Resolve-Path -Path "build/install"
 
 Write-Host "Copied to $DstDir" -ForegroundColor Green
 
-Get-ChildItem -Path $SrcDir -Filter "*.dll" -Recurse | ForEach-Object {
+Get-ChildItem -Path $SrcDir -Include "*.dll", "*.so" -Recurse | ForEach-Object {
     Copy-Item -Path $_.FullName -Destination $DstDir -Force
     Write-Host "$($_.Name)" -ForegroundColor Green
 }
