@@ -1,3 +1,6 @@
 [submodule "Gossamer.WebP/libwebp"]
 	path = Gossamer.WebP/libwebp
 	url = https://chromium.googlesource.com/webm/libwebp
+[submodule "Gossamer.Vma/VulkanMemoryAllocator"]
+	path = Gossamer.Vma/VulkanMemoryAllocator
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
