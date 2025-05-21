@@ -4,73 +4,111 @@
 
 typedef void *nint_t;
 
+enum Severity
+{
+    Debug = -1,
+    Info = 0,
+    Warning = 1,
+    Error = 2,
+};
+
 enum class Status
 {
     Fault = -1,
     OK = 0,
     InvalidArgument = 1,
     InvalidData = 2,
+    InvalidConversion = 3,
 };
 
 extern "C"
 {
-    __declspec(dllexport) nint_t luaCreate(const uint8_t *in_data, int32_t in_data_size)
+    __declspec(dllexport) int32_t luaOpen(lua_State **out_state)
     {
-        lua_State *L = luaL_newstate();
+        lua_State *state = luaL_newstate();
+        if (state == nullptr)
+            return static_cast<int32_t>(Status::Fault);
 
-        return 0;
+        *out_state = state;
+        return static_cast<int32_t>(Status::OK);
     }
 
-    __declspec(dllexport) int32_t luaFree(const uint8_t *in_data, int32_t in_data_size)
+    __declspec(dllexport) int32_t luaClose(lua_State *in_state)
     {
-        return 0;
+        if (in_state == nullptr)
+            return static_cast<int32_t>(Status::InvalidArgument);
+
+        lua_close(in_state);
+        return static_cast<int32_t>(Status::OK);
     }
 
-    /*
-     ** Prints an error message, adding the program name in front of it
-     ** (if present)
-     */
-    static void l_message(const char *pname, const char *msg)
+    __declspec(dllexport) int32_t luaRegisterApiFunction(
+        lua_State *in_state,
+        const uint8_t *in_module_name,
+        const int32_t in_module_name_size,
+        const uint8_t *in_function_name,
+        const int32_t in_function_name_size,
+        nint_t in_function)
     {
-        if (pname)
-            lua_writestringerror("%s: ", pname);
-        lua_writestringerror("%s\n", msg);
-    }
+        if (in_state == nullptr)
+            return static_cast<int32_t>(Status::InvalidArgument);
 
-    /*
-     ** Check whether 'status' is not OK and, if so, prints the error
-     ** message on the top of the stack.
-     */
-    static int report(lua_State *L, int status)
-    {
-        if (status != LUA_OK)
+        if (in_module_name == nullptr || in_module_name_size <= 0)
+            return static_cast<int32_t>(Status::InvalidArgument);
+        if (in_function_name == nullptr || in_function_name_size <= 0)
+            return static_cast<int32_t>(Status::InvalidArgument);
+        if (in_function == 0)
+            return static_cast<int32_t>(Status::InvalidArgument);
+
+        lua_getglobal(in_state, (const char *)in_module_name);
+        if (lua_isnoneornil(in_state, -1))
         {
-            const char *msg = lua_tostring(L, -1);
-            if (msg == NULL)
-                msg = "(error message not a string)";
-            l_message("Gossamer.Lua", msg);
-            lua_pop(L, 1); /* remove message */
+            lua_pop(in_state, 1);
+            lua_newtable(in_state);
+            lua_setglobal(in_state, (const char *)in_module_name);
+            lua_getglobal(in_state, (const char *)in_module_name);
         }
-        return status;
+
+        lua_pushlstring(in_state, (const char *)in_function_name, in_function_name_size);
+        lua_pushcfunction(in_state, static_cast<lua_CFunction>(in_function));
+        lua_settable(in_state, -3);
+        lua_pop(in_state, 1);
+
+        return static_cast<int32_t>(Status::OK);
     }
 
     /*
      ** Message handler used to run all chunks
      */
-    static int msghandler(lua_State *L)
+    static int msghandler(lua_State *state)
     {
-        const char *msg = lua_tostring(L, 1);
+        const char *msg = lua_tostring(state, 1);
         if (msg == NULL)
-        {                                            /* is error object not a string? */
-            if (luaL_callmeta(L, 1, "__tostring") && /* does it have a metamethod */
-                lua_type(L, -1) == LUA_TSTRING)      /* that produces a string? */
-                return 1;                            /* that is the message */
+        {                                                /* is error object not a string? */
+            if (luaL_callmeta(state, 1, "__tostring") && /* does it have a metamethod */
+                lua_type(state, -1) == LUA_TSTRING)      /* that produces a string? */
+                return 1;                                /* that is the message */
             else
-                msg = lua_pushfstring(L, "(error object is a %s value)",
-                                      luaL_typename(L, 1));
+                msg = lua_pushfstring(state, "(error object is a %s value)",
+                                      luaL_typename(state, 1));
         }
-        luaL_traceback(L, L, msg, 1); /* append a standard traceback */
-        return 1;                     /* return the traceback */
+        luaL_traceback(state, state, msg, 1); /* append a standard traceback */
+
+        lua_getglobal(state, "core");
+        lua_getfield(state, -1, "log");
+        if (lua_isfunction(state, -1))
+        {
+            lua_pushstring(state, lua_tostring(state, -3));
+            lua_pushinteger(state, static_cast<int64_t>(Severity::Error));
+            lua_call(state, 2, 0);
+            lua_pop(state, 1);
+        }
+        else
+        {
+            lua_pop(state, 2);
+        }
+
+        return 1; /* return the traceback */
     }
 
     /*
@@ -91,71 +129,177 @@ extern "C"
         return status;
     }
 
-    __declspec(dllexport) int32_t luaRun(const uint8_t *in_data, int32_t in_data_size)
+    __declspec(dllexport) int32_t luaPopInteger(lua_State *in_state, int64_t *out_integer)
     {
-        lua_State *L = luaL_newstate();
-        if (L == nullptr)
-            return static_cast<int32_t>(Status::Fault);
+        if (out_integer == nullptr)
+            return static_cast<int32_t>(Status::InvalidArgument);
 
-        luaL_openlibs(L);    
-        luaL_checkversion(L);
+        if (in_state == nullptr)
+            return static_cast<int32_t>(Status::InvalidArgument);
 
-        int status = luaL_loadbuffer(L, (const char *)in_data, in_data_size, "script");
-        if (status != LUA_OK)
+        int is_integer = 0;
+        lua_Integer i = lua_tointegerx(in_state, -1, &is_integer);
+        if (is_integer)
         {
-            report(L, status);
-            return static_cast<int32_t>(Status::InvalidData);
-        }
-
-        status = docall(L, 0, 0);
-        if (status == LUA_OK)
-        {
-            //lua_pop(L, 1); 
+            *out_integer = i;
+            lua_pop(in_state, 1);
+            return static_cast<int32_t>(Status::OK);
         }
         else
         {
-            //return static_cast<int32_t>(Status::Fault);
+            *out_integer = 0;
+            return static_cast<int32_t>(Status::InvalidConversion);
+        }
+    }
+
+    __declspec(dllexport) int32_t luaPushInteger(lua_State *in_state, int64_t in_integer)
+    {
+        if (in_state == nullptr)
+            return static_cast<int32_t>(Status::InvalidArgument);
+        lua_pushinteger(in_state, static_cast<lua_Integer>(in_integer));
+        return static_cast<int32_t>(Status::OK);
+    }
+
+    __declspec(dllexport) int32_t luaPopNumber(lua_State *in_state, double *out_number)
+    {
+        if (out_number == nullptr)
+            return static_cast<int32_t>(Status::InvalidArgument);
+
+        if (in_state == nullptr)
+            return static_cast<int32_t>(Status::InvalidArgument);
+
+        if (lua_isnumber(in_state, -1))
+        {
+            *out_number = lua_tonumber(in_state, -1);
+            lua_pop(in_state, 1);
+            return static_cast<int32_t>(Status::OK);
+        }
+        else
+        {
+            *out_number = 0;
+            return static_cast<int32_t>(Status::InvalidConversion);
+        }
+    }
+
+    __declspec(dllexport) int32_t luaPushNumber(lua_State *in_state, double in_number)
+    {
+        if (in_state == nullptr)
+            return static_cast<int32_t>(Status::InvalidArgument);
+
+        lua_pushnumber(in_state, in_number);
+        return static_cast<int32_t>(Status::OK);
+    }
+
+    __declspec(dllexport) int32_t luaSetGlobal(lua_State *in_state, const uint8_t *in_name, int32_t in_name_size)
+    {
+        if (in_state == nullptr)
+            return static_cast<int32_t>(Status::InvalidArgument);
+
+        if (in_name == nullptr || in_name_size <= 0)
+            return static_cast<int32_t>(Status::InvalidArgument);
+
+        lua_setglobal(in_state, (const char *)in_name);
+        return static_cast<int32_t>(Status::OK);
+    }
+
+    __declspec(dllexport) int32_t luaPushTable(lua_State *in_state)
+    {
+        if (in_state == nullptr)
+            return static_cast<int32_t>(Status::InvalidArgument);
+
+        lua_newtable(in_state);
+        return static_cast<int32_t>(Status::OK);
+    }
+
+    __declspec(dllexport) int32_t luaWriteTable(lua_State *in_state)
+    {
+        if (in_state == nullptr)
+            return static_cast<int32_t>(Status::InvalidArgument);
+
+        lua_settable(in_state, -3);
+        return static_cast<int32_t>(Status::OK);
+    }
+
+    __declspec(dllexport) int32_t luaPushFunction(lua_State *in_state, nint_t function)
+    {
+        if (in_state == nullptr)
+            return static_cast<int32_t>(Status::InvalidArgument);
+
+        lua_pushcfunction(in_state, static_cast<lua_CFunction>(function));
+        return static_cast<int32_t>(Status::OK);
+    }
+
+    __declspec(dllexport) int32_t luaGetStackCount(lua_State *in_state, int32_t *out_count)
+    {
+        if (out_count == nullptr)
+            return static_cast<int32_t>(Status::InvalidArgument);
+
+        if (in_state == nullptr)
+            return static_cast<int32_t>(Status::InvalidArgument);
+
+        *out_count = lua_gettop(in_state);
+        return static_cast<int32_t>(Status::OK);
+    }
+
+    __declspec(dllexport) int32_t luaPushString(lua_State *in_state, const uint8_t *in_string, int32_t in_string_size)
+    {
+        if (in_state == nullptr)
+            return static_cast<int32_t>(Status::InvalidArgument);
+
+        if (in_string == nullptr || in_string_size <= 0)
+            return static_cast<int32_t>(Status::InvalidArgument);
+
+        lua_pushlstring(in_state, (const char *)in_string, in_string_size);
+        return static_cast<int32_t>(Status::OK);
+    }
+
+    __declspec(dllexport) int32_t luaPopString(lua_State *in_state, uint8_t **out_string)
+    {
+        if (out_string == nullptr)
+            return static_cast<int32_t>(Status::InvalidArgument);
+
+        if (in_state == nullptr)
+            return static_cast<int32_t>(Status::InvalidArgument);
+
+        const char *msg = lua_tostring(in_state, -1);
+        if (msg != nullptr)
+        {
+            *out_string = (uint8_t *)msg;
+            lua_pop(in_state, 1);
+            return static_cast<int32_t>(Status::OK);
+        }
+        else if (luaL_callmeta(in_state, -1, "__tostring") && lua_type(in_state, -1) == LUA_TSTRING)
+        {
+            *out_string = (uint8_t *)lua_tostring(in_state, -1);
+            lua_pop(in_state, 1);
+            return static_cast<int32_t>(Status::OK);
+        }
+        else
+        {
+            *out_string = nullptr;
+            return static_cast<int32_t>(Status::InvalidConversion);
+        }
+    }
+
+    __declspec(dllexport) int32_t luaRun(lua_State *in_state, const uint8_t *in_data, int32_t in_data_size)
+    {
+        if (in_state == nullptr)
+            return static_cast<int32_t>(Status::InvalidArgument);
+
+        int status = luaL_loadbuffer(in_state, (const char *)in_data, in_data_size, "script");
+        if (status != LUA_OK)
+        {
+            return static_cast<int32_t>(Status::InvalidData);
         }
 
-        report(L, status);
-        lua_close(L);
-        return 0;
+        status = docall(in_state, 0, 0);
+        if (status == LUA_OK)
+        {
+            return static_cast<int32_t>(Status::OK);
+        }
+        else
+        {
+            return static_cast<int32_t>(Status::Fault);
+        }
     }
 }
-
-/*
-lua_State *L = luaL_newstate();
-if (L == nullptr)
-{
-lua_close(L);
-return static_cast<int32_t>(Status::Fault);
-}
-
-luaL_openlibs(L);  
-luaL_checkversion(L);
-
-int status = luaL_loadbuffer(L, (const char *)in_data, in_data_size, "script");
-if (status != LUA_OK)
-{
-report(L, status);
-lua_close(L);
-return static_cast<int32_t>(Status::InvalidData);
-}
-
-status = docall(L, 0, 0);
-if (status == LUA_OK)
-{
-// lua_pushboolean(L, 1);
-// lua_pop(L, 1);
-}
-else
-{
-// lua_pushboolean(L, 0);
-// return static_cast<int32_t>(Status::Fault);
-}
-
-report(L, status);
-
-lua_close(L);
-return 0;
-*/
